@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>ANONIX — Anonymous Chat</title>
+<script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:#090c10; --surface:#0f141c; --surf2:#141b25; --border:#1e2a38;
+    --accent:#00e5a0; --accentD:rgba(0,229,160,.12);
+    --txt:#e8edf5; --txt2:#5a7089; --txt3:#2f4255;
+    --danger:#ff4d6d; --me:#00c489; --meT:#001a12;
+    --font:'IBM Plex Mono','Courier New',monospace;
+  }
+  html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--font);}
+  body{display:flex;flex-direction:column;min-height:100vh;}
+  .grain{position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='.045'/%3E%3C/svg%3E");
+    background-repeat:repeat;}
+  .screen{display:none;position:relative;z-index:1;}
+  .screen.active{display:flex;}
+  #s-home{flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:32px 20px;gap:28px;}
+  .logo{display:flex;align-items:center;gap:14px;}
+  .logo-hex{font-size:42px;color:var(--accent);filter:drop-shadow(0 0 14px rgba(0,229,160,.5));line-height:1;}
+  .logo-title{font-size:30px;font-weight:700;letter-spacing:.16em;}
+  .logo-sub{font-size:11px;color:var(--txt2);letter-spacing:.08em;margin-top:3px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px 22px;display:flex;flex-direction:column;gap:14px;width:100%;max-width:400px;}
+  .card-desc{color:var(--txt2);font-size:13px;line-height:1.7;text-align:center;}
+  .btn{border:none;border-radius:9px;padding:14px 20px;font-family:var(--font);font-size:13px;font-weight:700;letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .15s,transform .1s;}
+  .btn:active{transform:scale(.97);opacity:.85;}
+  .btn-primary{background:var(--accent);color:var(--meT);}
+  .btn-secondary{background:transparent;color:var(--accent);border:1px solid var(--border);}
+  .footer-badge{color:var(--txt3);font-size:11px;letter-spacing:.06em;text-align:center;}
+  #s-create,#s-join{flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px 20px;gap:20px;}
+  .panel-header{display:flex;align-items:center;gap:14px;width:100%;max-width:400px;}
+  .btn-back{background:none;border:none;color:var(--txt2);font-family:var(--font);font-size:13px;cursor:pointer;padding:0;}
+  .panel-title{font-size:17px;font-weight:700;letter-spacing:.1em;}
+  .hint{color:var(--txt2);font-size:13px;line-height:1.65;}
+  .err-box{background:rgba(255,77,109,.1);border:1px solid rgba(255,77,109,.3);border-radius:8px;color:var(--danger);font-size:12px;padding:10px 14px;display:none;}
+  .err-box.show{display:block;}
+  .code-input{background:var(--surf2);border:1px solid var(--border);border-radius:9px;color:var(--accent);font-family:var(--font);font-size:20px;font-weight:700;letter-spacing:.22em;padding:14px 16px;text-align:center;text-transform:uppercase;outline:none;width:100%;}
+  .code-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accentD);}
+  #s-chat{flex-direction:column;height:100vh;max-height:100vh;overflow:hidden;}
+  .chat-header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:10px;flex-wrap:wrap;z-index:10;}
+  .chat-header-left{display:flex;align-items:center;gap:10px;}
+  .chat-hex{font-size:22px;color:var(--accent);filter:drop-shadow(0 0 8px rgba(0,229,160,.4));}
+  .chat-title-txt{font-size:14px;font-weight:700;letter-spacing:.14em;}
+  .status-row{display:flex;align-items:center;gap:6px;margin-top:2px;}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block;animation:pulse 2s ease-in-out infinite;}
+  .dot.warn{background:#f5a623;}.dot.danger{background:var(--danger);}
+  .status-txt{font-size:11px;color:var(--txt2);letter-spacing:.04em;}
+  .chat-header-right{display:flex;align-items:center;gap:8px;}
+  .code-tag{display:flex;align-items:center;gap:6px;background:var(--accentD);border:1px solid rgba(0,229,160,.2);border-radius:7px;padding:5px 10px;cursor:pointer;}
+  .code-tag-lbl{font-size:9px;color:var(--txt2);letter-spacing:.1em;}
+  .code-tag-val{font-size:12px;font-weight:700;color:var(--accent);letter-spacing:.15em;}
+  .code-tag-copy{font-size:12px;color:var(--txt2);}
+  .leave-btn{background:rgba(255,77,109,.1);border:1px solid rgba(255,77,109,.25);border-radius:7px;color:var(--danger);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;padding:5px 10px;}
+  .msg-area{flex:1;overflow-y:auto;padding:18px 14px;display:flex;flex-direction:column;gap:8px;}
+  .msg-area::-webkit-scrollbar{width:4px;}
+  .msg-area::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+  .msg-row{display:flex;animation:fadeIn .2s ease;}
+  .msg-row.me{justify-content:flex-end;}.msg-row.other{justify-content:flex-start;}
+  .bubble{max-width:78%;padding:10px 14px;word-break:break-word;}
+  .bubble.me{background:var(--me);color:var(--meT);border-radius:16px 16px 4px 16px;}
+  .bubble.other{background:var(--surf2);color:var(--txt);border:1px solid var(--border);border-radius:16px 16px 16px 4px;}
+  .bubble-txt{font-size:14px;line-height:1.55;white-space:pre-wrap;}
+  .bubble-time{font-size:10px;opacity:.6;margin-top:4px;text-align:right;letter-spacing:.04em;}
+  .bubble.media{padding:6px;}
+  .bubble.media .bubble-time{padding:0 6px 4px;margin-top:2px;}
+  .media-img{width:100%;max-width:260px;border-radius:10px;display:block;cursor:pointer;}
+  .media-video{width:100%;max-width:280px;border-radius:10px;display:block;}
+  .media-name{font-size:11px;padding:3px 6px 0;opacity:.7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .progress-wrap{background:var(--surf2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;min-width:180px;max-width:220px;}
+  .progress-label{font-size:11px;color:var(--txt2);margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .progress-bar-bg{background:var(--border);border-radius:4px;height:6px;overflow:hidden;}
+  .progress-bar-fill{height:100%;background:var(--accent);border-radius:4px;transition:width .15s;width:0%;}
+  .progress-pct{font-size:11px;color:var(--accent);margin-top:5px;text-align:right;}
+  .preview-bar{background:var(--surf2);border:1px solid var(--border);border-bottom:none;border-radius:10px 10px 0 0;padding:8px 12px;display:none;align-items:center;gap:10px;}
+  .preview-bar.show{display:flex;}
+  .preview-thumb{width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0;}
+  .preview-icon{width:44px;height:44px;background:var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
+  .preview-info{flex:1;min-width:0;}
+  .preview-name-txt{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .preview-size-txt{font-size:11px;color:var(--txt2);margin-top:2px;}
+  .preview-cancel{background:none;border:none;color:var(--danger);cursor:pointer;font-size:20px;padding:2px 6px;line-height:1;}
+  .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:40px 24px;min-height:200px;}
+  .empty-icon{font-size:44px;color:var(--accent);filter:drop-shadow(0 0 16px rgba(0,229,160,.4));animation:pulse 2.5s ease-in-out infinite;}
+  .empty-title{font-size:19px;font-weight:700;letter-spacing:.1em;}
+  .empty-sub{color:var(--txt2);font-size:13px;}
+  .big-code{display:flex;gap:5px;cursor:pointer;flex-wrap:wrap;justify-content:center;}
+  .big-code-char{background:var(--surface);border:1px solid var(--border);border-radius:9px;width:38px;height:50px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:var(--accent);}
+  .copy-hint{color:var(--txt2);font-size:11px;letter-spacing:.06em;}
+  .sys-msg{text-align:center;color:var(--txt3);font-size:12px;padding:8px;letter-spacing:.04em;}
+  .typing-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block;animation:bounce 1.2s ease-in-out infinite;}
+  .typing-dot:nth-child(2){animation-delay:.2s;}.typing-dot:nth-child(3){animation-delay:.4s;}
+  .input-area{background:var(--surface);border-top:1px solid var(--border);padding:10px 14px;flex-shrink:0;}
+  .input-row{display:flex;gap:8px;align-items:flex-end;}
+  .attach-btn{background:var(--surf2);border:1px solid var(--border);border-radius:10px;color:var(--txt2);width:46px;height:46px;font-size:20px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:color .15s;}
+  .attach-btn:hover{color:var(--accent);}
+  .attach-btn:disabled{opacity:.3;cursor:default;}
+  textarea{flex:1;background:var(--surf2);border:1px solid var(--border);border-radius:10px;color:var(--txt);font-family:var(--font);font-size:14px;padding:11px 14px;resize:none;outline:none;line-height:1.5;max-height:120px;overflow-y:auto;}
+  textarea::placeholder{color:var(--txt3);}
+  .send-btn{background:var(--accent);color:var(--meT);border:none;border-radius:10px;width:46px;height:46px;font-size:20px;font-weight:700;cursor:pointer;flex-shrink:0;transition:opacity .15s;}
+  .send-btn:disabled{opacity:.3;cursor:default;}
+  .input-footer{color:var(--txt3);font-size:10px;letter-spacing:.05em;text-align:center;margin-top:8px;}
+  .left-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  .left-txt{color:var(--danger);font-size:13px;}
+  .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:999;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
+  .lightbox.show{display:flex;}
+  .lightbox img{max-width:95vw;max-height:85vh;border-radius:10px;object-fit:contain;}
+  .lightbox-close{background:var(--surface);border:1px solid var(--border);color:var(--txt);font-family:var(--font);font-size:13px;border-radius:8px;padding:8px 18px;cursor:pointer;}
+  .overlay{position:fixed;inset:0;background:rgba(9,12,16,.85);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:99;}
+  .overlay.show{display:flex;}
+  .spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+  .overlay-txt{color:var(--txt2);font-size:13px;letter-spacing:.06em;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
+  @keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @supports(padding-bottom:env(safe-area-inset-bottom)){.input-area{padding-bottom:calc(10px + env(safe-area-inset-bottom));}}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<!-- HOME -->
+<div id="s-home" class="screen active">
+  <div class="logo">
+    <span class="logo-hex">⬡</span>
+    <div><div class="logo-title">ANONIX</div><div class="logo-sub">Zero-trace anonymous chat</div></div>
+  </div>
+  <div class="card">
+    <p class="card-desc">Obrolan anonim tanpa identitas, tanpa riwayat.<br>Kirim teks, foto &amp; video langsung P2P.</p>
+    <button class="btn btn-primary" onclick="goCreate()">✦ Buat Room</button>
+    <button class="btn btn-secondary" onclick="goJoin()">→ Masuk dengan Kode</button>
+  </div>
+  <div class="footer-badge">End-to-end P2P · No server · No logs · Foto &amp; Video</div>
+</div>
+
+<!-- CREATE -->
+<div id="s-create" class="screen">
+  <div class="panel-header">
+    <button class="btn-back" onclick="showHome()">← Kembali</button>
+    <span class="panel-title">Buat Room</span>
+  </div>
+  <div class="card">
+    <p class="hint">Generate kode unik lalu kirim ke lawan bicaramu. Kamu otomatis masuk room setelah klik tombol.</p>
+    <div id="create-err" class="err-box"></div>
+    <button class="btn btn-primary" id="create-btn" onclick="createRoom()">Generate Kode &amp; Mulai</button>
+  </div>
+</div>
+
+<!-- JOIN -->
+<div id="s-join" class="screen">
+  <div class="panel-header">
+    <button class="btn-back" onclick="showHome()">← Kembali</button>
+    <span class="panel-title">Masuk Room</span>
+  </div>
+  <div class="card">
+    <p class="hint">Masukkan kode yang dikirim temanmu.</p>
+    <div id="join-err" class="err-box"></div>
+    <input id="join-input" class="code-input" placeholder="Masukkan kode..." maxlength="36"
+      onkeydown="if(event.key==='Enter')joinRoom()" oninput="clearErr('join-err')">
+    <button class="btn btn-primary" id="join-btn" onclick="joinRoom()">Bergabung →</button>
+  </div>
+</div>
+
+<!-- CHAT -->
+<div id="s-chat" class="screen">
+  <div class="chat-header">
+    <div class="chat-header-left">
+      <span class="chat-hex">⬡</span>
+      <div>
+        <div class="chat-title-txt">ANONIX</div>
+        <div class="status-row">
+          <span class="dot" id="status-dot"></span>
+          <span class="status-txt" id="status-txt">Menghubungkan…</span>
+        </div>
+      </div>
+    </div>
+    <div class="chat-header-right">
+      <div class="code-tag" onclick="copyCode()">
+        <span class="code-tag-lbl">KODE</span>
+        <span class="code-tag-val" id="header-code">—</span>
+        <span class="code-tag-copy" id="copy-icon">⎘</span>
+      </div>
+      <button class="leave-btn" onclick="leaveChat()">✕ Keluar</button>
+    </div>
+  </div>
+
+  <div class="msg-area" id="msg-area">
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">⬡</div>
+      <div class="empty-title" id="empty-title">Room aktif</div>
+      <div class="empty-sub" id="empty-sub">Bagikan kode ini ke lawan bicaramu</div>
+      <div class="big-code" id="big-code" onclick="copyCode()"></div>
+      <div class="copy-hint" id="copy-hint">Ketuk untuk salin</div>
+    </div>
+    <div id="msgs"></div>
+    <div id="typing-row" style="display:none">
+      <div class="msg-row other">
+        <div class="bubble other" style="padding:10px 16px">
+          <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>
+        </div>
+      </div>
+    </div>
+    <div id="bottom-anchor"></div>
+  </div>
+
+  <div class="input-area">
+    <div class="preview-bar" id="preview-bar">
+      <div id="preview-media"></div>
+      <div class="preview-info">
+        <div class="preview-name-txt" id="preview-name"></div>
+        <div class="preview-size-txt" id="preview-size"></div>
+      </div>
+      <button class="preview-cancel" onclick="cancelFile()">✕</button>
+    </div>
+    <div id="input-normal" class="input-row">
+      <button class="attach-btn" id="attach-btn" onclick="document.getElementById('file-input').click()" disabled title="Foto/Video">📎</button>
+      <input id="file-input" type="file" accept="image/*,video/*" style="display:none" onchange="onFileSelect(event)">
+      <textarea id="msg-input" rows="1" placeholder="Menunggu lawan bicara…" disabled
+        oninput="autoResize(this);onTextInput()"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg()}"></textarea>
+      <button class="send-btn" id="send-btn" disabled onclick="sendMsg()">↑</button>
+    </div>
+    <div id="input-left" style="display:none" class="left-bar">
+      <span class="left-txt">Sesi berakhir — semua pesan terhapus.</span>
+      <button class="btn btn-primary" style="padding:9px 16px;font-size:12px" onclick="showHome()">Beranda</button>
+    </div>
+    <div class="input-footer">Enter kirim · 📎 foto/video maks 50MB · Tidak disimpan</div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <img id="lightbox-img" src="" alt="">
+  <button class="lightbox-close" onclick="closeLightbox()">✕ Tutup</button>
+</div>
+
+<!-- Overlay -->
+<div class="overlay" id="overlay">
+  <div class="spinner"></div>
+  <div class="overlay-txt" id="overlay-txt">Menghubungkan…</div>
+</div>
+
+<script>
+let peer=null,conn=null,myCode='',isHost=false;
+let typingTimer=null,typingTimeout=null;
+let pendingFile=null;
+const MAX_FILE=50*1024*1024;
+const CHUNK=16*1024;
+const incoming={};
+
+function showHome(){leaveChat(true);show('s-home');}
+function goCreate(){show('s-create');}
+function goJoin(){show('s-join');setTimeout(()=>document.getElementById('join-input').focus(),100);}
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
+
+function initPeer(){
+  return new Promise((res,rej)=>{
+    showOverlay('Menghubungkan ke jaringan P2P…');
+    const p=new Peer({debug:0});
+    const t=setTimeout(()=>{p.destroy();rej(new Error('Timeout koneksi P2P.'));},15000);
+    p.on('open',()=>{clearTimeout(t);hideOverlay();res(p);});
+    p.on('error',(e)=>{clearTimeout(t);hideOverlay();rej(e);});
+    peer=p;
+  });
+}
+
+async function createRoom(){
+  const btn=document.getElementById('create-btn');
+  btn.disabled=true;btn.textContent='Membuat room…';clearErr('create-err');
+  try{
+    await initPeer();
+    myCode=peer.id;isHost=true;
+    setStatus('waiting','Menunggu lawan bicara…');
+    peer.on('connection',(c)=>{conn=c;setupConn();setStatus('connected','Terhubung');enableInput();addSys('⬡ Lawan bicara bergabung. Mulai mengobrol!');});
+    show('s-chat');renderCode(myCode);
+    document.getElementById('header-code').textContent=shortCode(myCode);
+  }catch(e){showErr('create-err',e.message||'Gagal membuat room.');}
+  btn.disabled=false;btn.textContent='Generate Kode & Mulai';
+}
+
+async function joinRoom(){
+  const input=document.getElementById('join-input').value.trim();
+  if(!input){showErr('join-err','Masukkan kode terlebih dahulu.');return;}
+  const btn=document.getElementById('join-btn');
+  btn.disabled=true;btn.textContent='Menghubungkan…';clearErr('join-err');
+  try{
+    await initPeer();
+    myCode=input;isHost=false;
+    showOverlay('Menghubungkan ke room…');
+    conn=peer.connect(input,{reliable:true});
+    const t=setTimeout(()=>{hideOverlay();showErr('join-err','Kode tidak ditemukan atau host offline.');btn.disabled=false;btn.textContent='Bergabung →';},12000);
+    conn.on('open',()=>{
+      clearTimeout(t);hideOverlay();setupConn();
+      setStatus('connected','Terhubung');enableInput();
+      show('s-chat');
+      document.getElementById('header-code').textContent=shortCode(input);
+      renderCode(input);
+      document.getElementById('empty-state').style.display='none';
+      addSys('⬡ Kamu terhubung. Mulai mengobrol!');
+    });
+    conn.on('error',(e)=>{clearTimeout(t);hideOverlay();showErr('join-err','Gagal: '+(e.message||'host offline.'));btn.disabled=false;btn.textContent='Bergabung →';});
+  }catch(e){hideOverlay();showErr('join-err',e.message||'Gagal bergabung.');btn.disabled=false;btn.textContent='Bergabung →';}
+}
+
+function setupConn(){
+  conn.on('data',onData);
+  conn.on('close',()=>{setStatus('left','Lawan bicara keluar');disableInput();addSys('⬡ Lawan bicara meninggalkan percakapan.');showEndBar();});
+  conn.on('error',()=>{setStatus('left','Koneksi terputus');disableInput();addSys('⬡ Koneksi terputus.');showEndBar();});
+}
+
+function onData(d){
+  if(d.type==='msg'){
+    hideEmpty();appendMsg(d.text,false,d.time);stopTyping();
+  }else if(d.type==='typing'){
+    showTyping();clearTimeout(typingTimeout);typingTimeout=setTimeout(stopTyping,2500);
+  }else if(d.type==='stop-typing'){
+    stopTyping();
+  }else if(d.type==='file-start'){
+    incoming[d.id]={name:d.name,mime:d.mime,total:d.total,chunks:new Array(d.total),got:0};
+    showProgIn(d.id,d.name,0);
+  }else if(d.type==='chunk'){
+    const f=incoming[d.id];if(!f)return;
+    f.chunks[d.i]=d.data;f.got++;
+    const p=Math.round(f.got/f.total*100);
+    updateProg('pi-'+d.id,p);
+    if(f.got===f.total)assembleFile(d.id);
+  }
+}
+
+function assembleFile(id){
+  const f=incoming[id];
+  const dataUrl='data:'+f.mime+';base64,'+f.chunks.join('');
+  removeProg('pi-'+id);hideEmpty();
+  if(f.mime.startsWith('image/'))appendImg(dataUrl,f.name,false);
+  else appendVid(dataUrl,f.name,false);
+  delete incoming[id];
+}
+
+function sendMsg(){
+  if(pendingFile){sendFile();return;}
+  const ta=document.getElementById('msg-input');
+  const txt=ta.value.trim();
+  if(!txt||!conn)return;
+  const t=now();
+  conn.send({type:'msg',text:txt,time:t});
+  hideEmpty();appendMsg(txt,true,t);
+  ta.value='';autoResize(ta);
+  document.getElementById('send-btn').disabled=true;
+  conn.send({type:'stop-typing'});
+}
+
+function onFileSelect(e){
+  const file=e.target.files[0];e.target.value='';
+  if(!file)return;
+  if(file.size>MAX_FILE){alert('File terlalu besar. Maksimal 50MB.');return;}
+  if(!file.type.startsWith('image/')&&!file.type.startsWith('video/')){alert('Hanya foto dan video yang didukung.');return;}
+  const isImg=file.type.startsWith('image/');
+  const reader=new FileReader();
+  reader.onload=(ev)=>{
+    pendingFile={file,dataUrl:ev.target.result,isImg};
+    const bar=document.getElementById('preview-bar');
+    const med=document.getElementById('preview-media');
+    document.getElementById('preview-name').textContent=file.name;
+    document.getElementById('preview-size').textContent=fmtSize(file.size);
+    if(isImg){med.innerHTML=`<img src="${ev.target.result}" class="preview-thumb" alt="">`;}
+    else{med.innerHTML=`<div class="preview-icon">🎬</div>`;}
+    bar.classList.add('show');
+    document.getElementById('send-btn').disabled=false;
+  };
+  reader.readAsDataURL(file);
+}
+
+function cancelFile(){
+  pendingFile=null;
+  document.getElementById('preview-bar').classList.remove('show');
+  document.getElementById('preview-media').innerHTML='';
+  const ta=document.getElementById('msg-input');
+  document.getElementById('send-btn').disabled=!ta.value.trim();
+}
+
+function sendFile(){
+  if(!pendingFile||!conn)return;
+  const{file,dataUrl,isImg}=pendingFile;
+  cancelFile();
+  const b64=dataUrl.split(',')[1];
+  const total=Math.ceil(b64.length/CHUNK);
+  const id=Date.now()+Math.random().toString(36).slice(2);
+  conn.send({type:'file-start',id,name:file.name,mime:file.type,total});
+  showProgIn('po-'+id,file.name,0,'me');
+  let i=0;
+  function next(){
+    if(i>=total){
+      updateProg('po-'+id,100);
+      setTimeout(()=>{
+        removeProg('po-'+id);hideEmpty();
+        if(isImg)appendImg(dataUrl,file.name,true);
+        else appendVid(dataUrl,file.name,true);
+      },400);return;
+    }
+    conn.send({type:'chunk',id,i,data:b64.slice(i*CHUNK,(i+1)*CHUNK)});
+    updateProg('po-'+id,Math.round((i+1)/total*100));
+    i++;setTimeout(next,1);
+  }
+  next();
+}
+
+function showProgIn(id,name,pct,side='other'){
+  const row=document.createElement('div');
+  row.className='msg-row '+side;row.id=id;
+  const isMe=side==='me';
+  row.innerHTML=`<div class="progress-wrap" ${isMe?'style="background:var(--me);border-color:transparent"':''}>
+    <div class="progress-label" ${isMe?'style="color:var(--meT)"':''}>${isMe?'📤':'📥'} ${escHtml(name)}</div>
+    <div class="progress-bar-bg" ${isMe?'style="background:rgba(0,0,0,.2)"':''}>
+      <div class="progress-bar-fill" style="width:${pct}%${isMe?';background:var(--meT)':''}"></div>
+    </div>
+    <div class="progress-pct" ${isMe?'style="color:var(--meT)"':''}>${pct}%</div>
+  </div>`;
+  document.getElementById('msgs').appendChild(row);scrollBottom();
+}
+function updateProg(id,pct){const el=document.getElementById(id);if(!el)return;el.querySelector('.progress-bar-fill').style.width=pct+'%';el.querySelector('.progress-pct').textContent=pct+'%';}
+function removeProg(id){const el=document.getElementById(id);if(el)el.remove();}
+
+function appendImg(src,name,isMe){
+  const t=now();const row=document.createElement('div');
+  row.className='msg-row '+(isMe?'me':'other');
+  row.innerHTML=`<div class="bubble ${isMe?'me':'other'} media">
+    <img src="${src}" class="media-img" alt="${escHtml(name)}" onclick="openLightbox(this.src)">
+    <div class="bubble-time">${t}</div>
+  </div>`;
+  document.getElementById('msgs').appendChild(row);scrollBottom();
+}
+function appendVid(src,name,isMe){
+  const t=now();const row=document.createElement('div');
+  row.className='msg-row '+(isMe?'me':'other');
+  row.innerHTML=`<div class="bubble ${isMe?'me':'other'} media">
+    <video src="${src}" class="media-video" controls playsinline></video>
+    <div class="media-name">${escHtml(name)}</div>
+    <div class="bubble-time">${t}</div>
+  </div>`;
+  document.getElementById('msgs').appendChild(row);scrollBottom();
+}
+function appendMsg(text,isMe,time){
+  const row=document.createElement('div');
+  row.className='msg-row '+(isMe?'me':'other');
+  row.innerHTML=`<div class="bubble ${isMe?'me':'other'}"><div class="bubble-txt">${escHtml(text)}</div><div class="bubble-time">${time}</div></div>`;
+  document.getElementById('msgs').appendChild(row);scrollBottom();
+}
+function addSys(txt){const d=document.createElement('div');d.className='sys-msg';d.textContent=txt;document.getElementById('msgs').appendChild(d);scrollBottom();}
+function hideEmpty(){document.getElementById('empty-state').style.display='none';}
+function scrollBottom(){document.getElementById('bottom-anchor').scrollIntoView({behavior:'smooth'});}
+
+function openLightbox(src){document.getElementById('lightbox-img').src=src;document.getElementById('lightbox').classList.add('show');}
+function closeLightbox(){document.getElementById('lightbox').classList.remove('show');document.getElementById('lightbox-img').src='';}
+
+function onTextInput(){
+  if(!conn)return;
+  clearTimeout(typingTimer);
+  conn.send({type:'typing'});
+  typingTimer=setTimeout(()=>conn&&conn.send({type:'stop-typing'}),2000);
+  document.getElementById('send-btn').disabled=!document.getElementById('msg-input').value.trim()&&!pendingFile;
+}
+function showTyping(){document.getElementById('typing-row').style.display='';scrollBottom();}
+function stopTyping(){document.getElementById('typing-row').style.display='none';}
+
+function leaveChat(silent){
+  if(conn){try{conn.close();}catch{}conn=null;}
+  if(peer){try{peer.destroy();}catch{}peer=null;}
+  myCode='';isHost=false;pendingFile=null;
+  document.getElementById('msgs').innerHTML='';
+  document.getElementById('empty-state').style.display='flex';
+  document.getElementById('empty-title').textContent='Room aktif';
+  document.getElementById('empty-sub').textContent='Bagikan kode ini ke lawan bicaramu';
+  document.getElementById('big-code').innerHTML='';
+  document.getElementById('copy-hint').textContent='Ketuk untuk salin';
+  document.getElementById('header-code').textContent='—';
+  document.getElementById('input-normal').style.display='';
+  document.getElementById('input-left').style.display='none';
+  document.getElementById('preview-bar').classList.remove('show');
+  document.getElementById('preview-media').innerHTML='';
+  disableInput();stopTyping();
+  clearErr('create-err');clearErr('join-err');
+  document.getElementById('join-input').value='';
+  document.getElementById('create-btn').disabled=false;
+  document.getElementById('create-btn').textContent='Generate Kode & Mulai';
+}
+function showEndBar(){document.getElementById('input-normal').style.display='none';document.getElementById('input-left').style.display='';}
+function setStatus(state,label){
+  const d=document.getElementById('status-dot'),t=document.getElementById('status-txt');
+  d.className='dot'+(state==='connected'?'':state==='left'?' danger':' warn');t.textContent=label;
+}
+function enableInput(){const ta=document.getElementById('msg-input');ta.disabled=false;ta.placeholder='Ketik pesan…';document.getElementById('attach-btn').disabled=false;}
+function disableInput(){const ta=document.getElementById('msg-input');ta.disabled=true;ta.placeholder='Menunggu lawan bicara…';document.getElementById('send-btn').disabled=true;document.getElementById('attach-btn').disabled=true;}
+function renderCode(code){const s=shortCode(code);document.getElementById('big-code').innerHTML=s.split('').map(c=>`<span class="big-code-char">${c}</span>`).join('');}
+function shortCode(id){return id.length>8?id.slice(-8).toUpperCase():id.toUpperCase();}
+function copyCode(){
+  navigator.clipboard.writeText(myCode).catch(()=>{});
+  document.getElementById('copy-hint').textContent='✓ Kode disalin!';
+  document.getElementById('copy-icon').textContent='✓';
+  setTimeout(()=>{document.getElementById('copy-hint').textContent='Ketuk untuk salin';document.getElementById('copy-icon').textContent='⎘';},2000);
+}
+function showOverlay(m){document.getElementById('overlay-txt').textContent=m;document.getElementById('overlay').classList.add('show');}
+function hideOverlay(){document.getElementById('overlay').classList.remove('show');}
+function showErr(id,m){const el=document.getElementById(id);el.textContent=m;el.classList.add('show');}
+function clearErr(id){document.getElementById(id).classList.remove('show');}
+function autoResize(ta){ta.style.height='auto';ta.style.height=Math.min(ta.scrollHeight,120)+'px';}
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function fmtSize(b){if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(1)+'KB';return(b/1048576).toFixed(1)+'MB';}
+function now(){return new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});}
+</script>
+</body>
+</html>
