@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>ANONIX — Anonymous Chat</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬡</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+  
+  <!-- External Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-app-compat.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/firebase-database-compat.min.js"></script>
+  <script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"></script>
+</head>
+<body>
+  <div class="grain"></div>
+
+  <!-- HOME SCREEN -->
+  <div id="s-home" class="screen active">
+    <div class="logo">
+      <span class="logo-hex">⬡</span>
+      <div>
+        <div class="logo-title">ANONIX</div>
+        <div class="logo-sub">Zero-trace anonymous chat</div>
+      </div>
+    </div>
+    <div class="card">
+      <p class="card-desc">Obrolan anonim tanpa identitas, tanpa riwayat.<br>Kirim teks, foto &amp; video langsung P2P.</p>
+      <button class="btn btn-primary" onclick="goCreate()">✦ Buat Room</button>
+      <button class="btn btn-secondary" onclick="goJoin()">→ Masuk dengan Kode</button>
+    </div>
+    <div class="footer-badge">End-to-end · No history · just message & enjoy</div>
+  </div>
+
+  <!-- CREATE SCREEN -->
+  <div id="s-create" class="screen">
+    <div class="panel-header">
+      <button class="btn-back" onclick="showHome()">← Kembali</button>
+      <span class="panel-title">Buat Room</span>
+    </div>
+    <div class="card">
+      <p class="hint">Generate kode unik lalu kirim ke lawan bicaramu. Kamu otomatis masuk room setelah klik tombol.</p>
+      <div id="create-err" class="err-box"></div>
+      <button class="btn btn-primary" id="create-btn" onclick="createRoom()">Generate Kode & Mulai</button>
+    </div>
+  </div>
+
+  <!-- JOIN SCREEN -->
+  <div id="s-join" class="screen">
+    <div class="panel-header">
+      <button class="btn-back" onclick="showHome()">← Kembali</button>
+      <span class="panel-title">Masuk Room</span>
+    </div>
+    <div class="card">
+      <p class="hint">Masukkan kode yang dikirim temanmu.</p>
+      <div id="join-err" class="err-box"></div>
+      <input id="join-input" class="code-input" placeholder="KODE..." maxlength="6"
+        onkeydown="if(event.key==='Enter')joinRoom()" oninput="clearErr('join-err');this.value=this.value.toUpperCase()">
+      <button class="btn btn-primary" id="join-btn" onclick="joinRoom()">Bergabung →</button>
+    </div>
+  </div>
+
+  <!-- CHAT SCREEN -->
+  <div id="s-chat" class="screen">
+    <div class="expired-overlay" id="expired-overlay">
+      <div class="expired-icon">⌛</div>
+      <div class="expired-title">KODE EXPIRED</div>
+      <div class="expired-sub">Waktu 5 menit habis sebelum ada yang bergabung.<br>Buat room baru untuk memulai obrolan.</div>
+      <button class="btn btn-primary" style="margin-top:8px" onclick="showHome()">Buat Room Baru</button>
+    </div>
+
+    <div class="chat-header" onclick="toggleConnPanel()">
+      <div class="chat-header-left">
+        <span class="chat-hex">⬡</span>
+        <div>
+          <div class="chat-title-txt">ANONIX</div>
+          <div class="status-row">
+            <span class="dot warn" id="status-dot"></span>
+            <span class="status-txt" id="status-txt">Menghubungkan...</span>
+            <span class="conn-chevron" id="conn-chevron">▾</span>
+          </div>
+        </div>
+      </div>
+      <div class="chat-header-right" onclick="event.stopPropagation()">
+        <div id="code-timer-wrap" class="code-timer-wrap">
+          <span class="code-timer-icon">⏱</span>
+          <div>
+            <div class="code-timer-txt" id="code-timer-txt">5:00</div>
+            <div class="code-timer-bar-wrap"><div class="code-timer-bar" id="code-timer-bar" style="width:100%"></div></div>
+          </div>
+        </div>
+        <div class="code-tag" onclick="copyCode()">
+          <span class="code-tag-lbl">KODE</span>
+          <span class="code-tag-val" id="header-code">--</span>
+          <span class="code-tag-copy" id="copy-icon">❐</span>
+        </div>
+        <button class="leave-btn" onclick="showHome()">✕ Keluar</button>
+      </div>
+    </div>
+
+    <div class="conn-panel" id="conn-panel">
+      <div class="conn-grid">
+        <div class="conn-item"><span class="conn-lbl">Latensi</span><span class="conn-val muted" id="cp-latency">--</span></div>
+        <div class="conn-item"><span class="conn-lbl">Enkripsi</span><span class="conn-val">DTLS 1.2</span></div>
+      </div>
+    </div>
+
+    <div class="msg-area" id="msg-area">
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">⬡</div>
+        <div class="empty-title">Room aktif</div>
+        <div class="empty-sub">Bagikan kode ini ke lawan bicaramu</div>
+        <div class="big-code" id="big-code" onclick="copyCode()"></div>
+        <div class="copy-hint" id="copy-hint">Ketuk untuk salin</div>
+        <div class="qr-wrap" id="qr-wrap" style="display:none">
+          <canvas id="qr-canvas"></canvas>
+          <div class="qr-hint">Scan untuk join langsung</div>
+        </div>
+        <div class="share-row" id="share-row" style="display:none">
+          <button class="share-copy-btn" onclick="copyCode()">❐ Salin</button>
+          <button class="share-primary-btn" onclick="shareCode()">↗ Bagikan</button>
+        </div>
+      </div>
+      <div id="msgs"></div>
+      <div id="typing-row" style="display:none">
+        <div class="msg-row other">
+          <div class="bubble other" style="padding:10px 16px">
+            <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>
+          </div>
+        </div>
+      </div>
+      <div id="bottom-anchor"></div>
+    </div>
+
+    <div class="input-area">
+      <div class="reply-preview" id="reply-preview">
+        <div class="reply-preview-body">
+          <div class="reply-preview-lbl">Membalas</div>
+          <div class="reply-preview-txt" id="reply-preview-txt"></div>
+        </div>
+        <button class="reply-preview-cancel" onclick="cancelReply()">✕</button>
+      </div>
+      <div class="preview-bar" id="preview-bar">
+        <div id="preview-media"></div>
+        <div class="preview-info">
+          <div class="preview-name-txt" id="preview-name"></div>
+          <div class="preview-size-txt" id="preview-size"></div>
+        </div>
+        <button class="preview-cancel" onclick="cancelFile()">✕</button>
+      </div>
+      <div id="input-normal" class="input-row">
+        <button class="attach-btn" id="attach-btn" onclick="document.getElementById('file-input').click()" disabled title="Foto/Video">📎</button>
+        <input id="file-input" type="file" accept="image/*,video/*" style="display:none" onchange="onFileSelect(event)">
+        <textarea id="msg-input" rows="1" placeholder="Menunggu lawan bicara..." disabled
+          oninput="autoResize(this);onTextInput()"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg()}"></textarea>
+        <button class="send-btn" id="send-btn" disabled onclick="sendMsg()">↑</button>
+      </div>
+      <div class="input-footer">Enter kirim · 📎 foto/video maks 50MB · Tidak disimpan</div>
+    </div>
+  </div>
+
+  <!-- Lightbox -->
+  <div class="lightbox" id="lightbox" onclick="closeLightbox()">
+    <img id="lightbox-img" src="" alt="">
+    <button class="lightbox-close" onclick="closeLightbox()">✕ Tutup</button>
+  </div>
+
+  <!-- Overlay -->
+  <div class="overlay" id="overlay">
+    <div class="spinner"></div>
+    <div class="overlay-txt" id="overlay-txt">Menghubungkan...</div>
+  </div>
+
+  <!-- Application Scripts -->
+  <script src="js/firebase-config.js"></script>
+  <script type="module" src="js/anonix.js"></script>
+</body>
+</html>
