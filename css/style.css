@@ -259,6 +259,9 @@ textarea:focus { border-color: rgba(42,240,182,0.65); box-shadow: 0 0 0 3px rgba
 .code-timer-wrap.urgent .code-timer-txt { color: var(--danger); }
 
 .share-row { display: flex; gap: 8px; margin-top: 10px; }
+.share-copy-btn { background: var(--surf2); border: 1px solid rgba(89,137,208,.45); color: var(--accent); border-radius: 8px; padding: 9px 14px; font-family: var(--font-mono); font-size: 12px; font-weight: 700; cursor: pointer; }
+.share-primary-btn { background: linear-gradient(135deg,#4dffcb 0%,var(--accent) 55%,#82ffd8 100%); color: var(--meT); border: none; border-radius: 8px; padding: 9px 18px; font-family: var(--font-mono); font-size: 12px; font-weight: 700; cursor: pointer; box-shadow: 0 10px 24px rgba(42,240,182,.22); }
+
 .qr-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 10px; }
 #qr-canvas { border-radius: 8px; background: white; padding: 5px; }
 .qr-hint { font-size: 10px; color: var(--txt3); }
