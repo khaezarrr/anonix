@@ -229,6 +229,7 @@ function sendMsg() {
 
 function appendMsg(txt, me, time, id, replyTo) {
   const msgs = document.getElementById('msgs');
+  if (!msgs) return;
   const div = document.createElement('div');
   div.className = 'msg-outer ' + (me ? 'me' : 'other');
   div.innerHTML = `
